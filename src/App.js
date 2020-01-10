@@ -1,49 +1,78 @@
 import React from 'react';
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import Button from 'react-bootstrap/Button';
-import Container from 'react-bootstrap/Container'
-import Row from 'react-bootstrap/Row'
-import Col from 'react-bootstrap/Col'
-import DatePicker from "react-datepicker";
-import Table from 'react-bootstrap/Table'
-import Form from 'react-bootstrap/Form'
-
-import './index.css';
-
 import "react-datepicker/dist/react-datepicker.css";
-
-class File {
-  constructor(title, content, categories, isMarkdown) {
-    this.title = title;
-    this.content = content;
-    this.categories = categories;
-    this.isMarkdown = isMarkdown;
-    this.date = new Date();
-  }
-}
+import './index.css';
+import Button from 'react-bootstrap/Button';
+import Container from 'react-bootstrap/Container';
+import Row from 'react-bootstrap/Row';
+import Col from 'react-bootstrap/Col';
+import DatePicker from "react-datepicker";
+import Table from 'react-bootstrap/Table';
+import Form from 'react-bootstrap/Form';
 
 const MAIN = "main";
 const DETAILS = "details";
 
 let MOCK_CATEGORIES = ["Lime", "Peach", "Pear", "Apple"] // spremeni v function getCategories() ki vrne array stringov
-let MOCK_FILES = [
-  new File("First", "blalalab", [], false),
-  new File("Second", "gjilagkjglčsd", [], true)
-]
+
+function titleExists(title) {
+  return false;
+}
 
 class App extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      page: DETAILS,
-      files: MOCK_FILES,
+      page: MAIN,
+      files: [],
       selectedFile: null
     };
     this.handleDisplayMain = this.handleDisplayMain.bind(this);
     this.handleDisplayDetails = this.handleDisplayDetails.bind(this);
-    this.saveFile = this.saveFile.bind(this);
+    this.getStoredFiles = this.getStoredFiles.bind(this);
+    this.storeFile = this.storeFile.bind(this);
+    this.deleteStoredFile = this.deleteStoredFile.bind(this);
+
+    this.getStoredFiles();
   }
+
+  // FILE API
+  getStoredFiles() {
+    fetch('http://localhost:3001/getFiles')
+      .then(res => res.json())
+      .then(files => this.setState({ files: files }));
+  }
+
+  storeFile(file, isNewFile) {
+    if (!isNewFile) {
+      this.deleteStoredFile(file);
+    }
+    fetch('http://localhost:3001/saveFile', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({file:file})
+    });
+
+    this.setState({page: MAIN});
+  }
+
+  deleteStoredFile(fileTitle) {
+    fetch('http://localhost:3001/deleteFile', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: fileTitle,
+      })
+    });
+  }
+  // FILE API END
 
   handleDisplayMain() {
     this.setState({page: MAIN});
@@ -56,25 +85,19 @@ class App extends React.Component {
     });
   }
 
-  saveFile(file, isNewFile) {
-    if (isNewFile) {
-      console.log("save file")
-    } else {
-      console.log("delete and save file")
-    }
-    this.setState({page: MAIN});
-  }
-
   render() {
     let displayedPage =
       <MainWindow
+        files={this.state.files}
         onDisplayDetails={this.handleDisplayDetails}
+        getStoredFiles={this.getStoredFiles}
+        deleteStoredFile={this.deleteStoredFile}
       />;
     if (this.state.page === DETAILS) {
       displayedPage =
         <DetailsWindow
           onDisplayMain={this.handleDisplayMain}
-          onSaveFile={this.saveFile}
+          onSaveFile={this.storeFile}
           selectedFile={this.state.selectedFile}
         />;
     }
@@ -91,14 +114,12 @@ class MainWindow extends React.Component {
     super(props);
     this.state = {
       filters: [],
-      allFiles: this.getFiles(),
-      displayedFiles: this.getFiles()
     };
+    this.files=this.props.files;
 
     this.handleFiltersChange = this.handleFiltersChange.bind(this);
     this.enterDetailsView = this.enterDetailsView.bind(this);
     this.deleteFile = this.deleteFile.bind(this);
-    this.getFiles = this.getFiles.bind(this);
   }
 
   handleFiltersChange(newFilters) {
@@ -115,21 +136,16 @@ class MainWindow extends React.Component {
   }
 
   deleteFile(fileTitle) {
-    MOCK_FILES.splice(MOCK_FILES.indexOf(fileTitle), 1);
-    this.setState({allFiles: this.getFiles()});
+    this.props.deleteStoredFile(fileTitle);
   }
 
   findFileByTitle(title) {
-    for(let i = 0; i < MOCK_FILES.length; i++) {
-      if (MOCK_FILES[i].title === title) {
-        return MOCK_FILES[i];
+    for(let i = 0; i < this.props.files.length; i++) {
+      if (this.props.files[i].title === title) {
+        return this.props.files[i];
       }
     }
     return null;
-  }
-
-  getFiles() {
-    return MOCK_FILES;
   }
 
   render() {
@@ -139,6 +155,7 @@ class MainWindow extends React.Component {
           onFiltersChange={this.handleFiltersChange}
         />
         <NoteTable
+          files={this.props.files}
           onEnterDetailsView={this.enterDetailsView}
           onDeleteFile={this.deleteFile}
         />
@@ -253,14 +270,14 @@ class NoteTable extends React.Component {
   }
 
   getTableRows() {
-    return MOCK_FILES.map((file) =>
+    return this.props.files.map((file) =>
       <tr key={file.title}>
         <td>
           <Button variant="link" onClick={this.enterEditMode} value={file.title}>Edit</Button>
           |
           <Button variant="link" onClick={this.deleteFile} value={file.title}>Delete</Button>
         </td>
-        <td>{file.date.toLocaleDateString()}</td>
+        <td>{(new Date(file.date)).toLocaleDateString()}</td>
         <td>{file.title}</td>
       </tr>
     );
@@ -332,7 +349,7 @@ class DetailsWindow extends React.Component {
     let file = props.selectedFile;
     this.isNewFile = file === null
     if (this.isNewFile) {
-      file = new File("", "", [], false);
+      file = {"title":"", "content":"", "categories":[], "isMarkdown":false, "date":new Date()};
     }
 
     this.state = {
@@ -362,7 +379,14 @@ class DetailsWindow extends React.Component {
   }
 
   handleSaveFile() {
-    let file = new File(this.state.title, this.state.content);
+    let file =  {"title":this.state.title, "content":this.state.content, "categories":this.state.categories, "isMarkdown":this.state.isMarkdown};
+    if (this.state.title === "") {
+      alert("File title cannot be empty!");
+      return;
+    } if (titleExists(this.state.title)) {
+      alert("A file with that title already exists")
+      return;
+    }
     this.props.onSaveFile(file, this.isNewFile);
   }
 
