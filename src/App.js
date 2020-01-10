@@ -14,8 +14,6 @@ import Form from 'react-bootstrap/Form';
 const MAIN = "main";
 const DETAILS = "details";
 
-let MOCK_CATEGORIES = ["Lime", "Peach", "Pear", "Apple"] // spremeni v function getCategories() ki vrne array stringov
-
 function titleExists(title) {
   return false;
 }
@@ -46,7 +44,9 @@ class App extends React.Component {
 
   storeFile(file, isNewFile) {
     if (!isNewFile) {
-      this.deleteStoredFile(file);
+      this.deleteStoredFile(this.state.selectedFile.title);
+    } else {
+      this.setState({date: new Date()});
     }
     fetch('http://localhost:3001/saveFile', {
       method: 'POST',
@@ -54,8 +54,11 @@ class App extends React.Component {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({file:file})
-    });
+      body: JSON.stringify({
+        file:file,
+        date:file.date
+      })
+    }).then(this.getStoredFiles());
 
     this.setState({page: MAIN});
   }
@@ -70,7 +73,7 @@ class App extends React.Component {
       body: JSON.stringify({
         title: fileTitle,
       })
-    });
+    }).then(this.getStoredFiles());
   }
   // FILE API END
 
@@ -113,13 +116,15 @@ class MainWindow extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      filters: [],
+      filters: {},
     };
-    this.files=this.props.files;
 
     this.handleFiltersChange = this.handleFiltersChange.bind(this);
     this.enterDetailsView = this.enterDetailsView.bind(this);
     this.deleteFile = this.deleteFile.bind(this);
+    this.getDisplayedFiles = this.getDisplayedFiles.bind(this);
+    this.fileHasCategory = this.fileHasCategory.bind(this);
+    this.getAllCategories = this.getAllCategories.bind(this);
   }
 
   handleFiltersChange(newFilters) {
@@ -148,14 +153,56 @@ class MainWindow extends React.Component {
     return null;
   }
 
+  fileHasCategory(file, category) {
+    return file.categories.includes(category);
+  }
+
+  getDisplayedFiles() {
+    let files = this.props.files;
+    let filteredFiles = [];
+    if (Object.keys(this.state.filters).length === 0) {
+      return files;
+    }
+    for (let i = 0; i < files.length; i++) {
+      let file = files[i];
+      let d = new Date(file.date);
+      let dFrom = new Date(this.state.filters.fromDate);
+      let dTo = new Date(this.state.filters.toDate);
+      dFrom.setDate(dFrom.getDate()-1);
+      dFrom.setHours(0);
+      dFrom.setMinutes(0);
+      dFrom.setSeconds(0);
+      if (dFrom <= d && dTo >= d && this.fileHasCategory(file, this.state.filters.category)) {
+        filteredFiles.push(file);
+      }
+    }
+    return filteredFiles;
+  }
+
+  getAllCategories() {
+    let files = this.props.files;// Create Set
+    let categories = [];
+    for (let i = 0; i < files.length; i++) {
+      for (let j = 0; j < files[i].categories.length; j++) {
+        let cat = files[i].categories[j];
+        if(categories.indexOf(cat) === -1) {
+          categories.push(cat);
+        }
+      }
+    }
+    return categories;
+  }
+
   render() {
+    console.log(this.props.files);
     return (
       <div>
         <FilterBar
+          categories={this.getAllCategories()}
           onFiltersChange={this.handleFiltersChange}
         />
         <NoteTable
-          files={this.props.files}
+          files={this.getDisplayedFiles()}
           onEnterDetailsView={this.enterDetailsView}
           onDeleteFile={this.deleteFile}
         />
@@ -205,7 +252,7 @@ class FilterBar extends React.Component {
   }
 
   getCategoriesDropdown() {
-    const elements = MOCK_CATEGORIES.map((category) =>
+    const elements = this.props.categories.map((category) =>
       <option value={category} key={category}>{category}</option>
     );
     const ddl =
@@ -216,7 +263,7 @@ class FilterBar extends React.Component {
   }
 
   passFilters() {
-    let filters = [this.state.fromDate, this.state.toDate, this.state.category];
+    let filters = {fromDate:this.state.fromDate, toDate:this.state.toDate, category:this.state.category};
     this.props.onFiltersChange(filters);
   }
 
@@ -264,7 +311,6 @@ class FilterBar extends React.Component {
 class NoteTable extends React.Component {
   constructor(props) {
     super(props);
-
     this.enterEditMode = this.enterEditMode.bind(this);
     this.deleteFile = this.deleteFile.bind(this);
   }
@@ -357,6 +403,7 @@ class DetailsWindow extends React.Component {
       content: file.content,
       categories: file.categories,
       isMarkdown: file.isMarkdown,
+      date: file.date
     };
 
     this.handleInputChange = this.handleInputChange.bind(this);
@@ -379,7 +426,7 @@ class DetailsWindow extends React.Component {
   }
 
   handleSaveFile() {
-    let file =  {"title":this.state.title, "content":this.state.content, "categories":this.state.categories, "isMarkdown":this.state.isMarkdown};
+    let file =  {"title":this.state.title, "content":this.state.content, "categories":this.state.categories, "isMarkdown":this.state.isMarkdown, "date":this.state.date};
     if (this.state.title === "") {
       alert("File title cannot be empty!");
       return;
