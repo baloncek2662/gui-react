@@ -86,7 +86,10 @@ class App extends React.Component {
     });
   }
 
-  titleExists(title) {
+  titleExists(title, isNewFile) {
+    if (!isNewFile) {
+      return false;
+    }
     for (let i = 0; i < this.state.files.length; i++) {
       if (this.state.files[i].title === title) {
         return true;
@@ -131,10 +134,11 @@ class MainWindow extends React.Component {
     this.handleFiltersChange = this.handleFiltersChange.bind(this);
     this.enterDetailsView = this.enterDetailsView.bind(this);
     this.deleteFile = this.deleteFile.bind(this);
-    this.getDisplayedFiles = this.getDisplayedFiles.bind(this);
+    this.getFilteredFiles = this.getFilteredFiles.bind(this);
     this.fileHasCategory = this.fileHasCategory.bind(this);
     this.getAllCategories = this.getAllCategories.bind(this);
     this.handlePageChange = this.handlePageChange.bind(this);
+    this.filterPage = this.filterPage.bind(this);
   }
 
   handleFiltersChange(newFilters) {
@@ -167,10 +171,13 @@ class MainWindow extends React.Component {
     return file.categories.includes(category);
   }
 
-  getDisplayedFiles() {
+  getFilteredFiles(page, displayOnly) {
     let files = this.props.files;
     let filteredFiles = [];
     if (Object.keys(this.state.filters).length === 0) {
+      if (displayOnly) {
+        return this.filterPage(files);
+      }
       return files;
     }
     for (let i = 0; i < files.length; i++) {
@@ -186,7 +193,16 @@ class MainWindow extends React.Component {
         filteredFiles.push(file);
       }
     }
+    if (displayOnly) {
+      return this.filterPage(filteredFiles);
+    }
     return filteredFiles;
+  }
+
+  filterPage(files) {
+    let from = (this.state.currentPage - 1) * NOTES_PER_PAGE;
+    let to = from + NOTES_PER_PAGE;
+    return files.slice(from, to);
   }
 
   getAllCategories() {
@@ -203,8 +219,8 @@ class MainWindow extends React.Component {
     return categories;
   }
 
-  handlePageChange() {
-    console.log("handle page change");
+  handlePageChange(page) {
+    this.setState({currentPage:page});
   }
 
   render() {
@@ -215,12 +231,12 @@ class MainWindow extends React.Component {
           onFiltersChange={this.handleFiltersChange}
         />
         <NoteTable
-          files={this.getDisplayedFiles()}
+          files={this.getFilteredFiles(this.state.currentPage, true)}
           onEnterDetailsView={this.enterDetailsView}
           onDeleteFile={this.deleteFile}
         />
         <NavigationBar
-          files={this.getDisplayedFiles()}
+          files={this.getFilteredFiles(this.state.currentPage, false)}
           onEnterDetailsView={this.enterDetailsView}
           onPageChange={this.handlePageChange}
         />
@@ -380,19 +396,36 @@ class NavigationBar extends React.Component {
     super(props);
     this.state = {
       currentPage: 1,
-      maxPages: Math.ceil(this.props.files.length/NOTES_PER_PAGE)
     };
 
     this.enterNewMode = this.enterNewMode.bind(this);
+    this.previousPage = this.previousPage.bind(this);
+    this.nextPage = this.nextPage.bind(this);
   }
 
   enterNewMode() {
     this.props.onEnterDetailsView();
   }
 
+  previousPage() {
+    if (this.state.currentPage === 1) {
+      return 1;
+    }
+    this.props.onPageChange(this.state.currentPage-1);
+    this.setState({currentPage:this.state.currentPage-1});
+  }
+
+  nextPage() {
+    let maxPages = Math.ceil(this.props.files.length/NOTES_PER_PAGE);
+    if (this.state.currentPage === maxPages) {
+      return;
+    }
+    this.props.onPageChange(this.state.currentPage+1);
+    this.setState({currentPage:this.state.currentPage+1});
+  }
+
   render() {
-    console.log(this.state.currentPage);
-    console.log(this.state.maxPages);
+    let maxPages = Math.ceil(this.props.files.length/NOTES_PER_PAGE);
     return (
       <Container>
         <Row>
@@ -401,11 +434,11 @@ class NavigationBar extends React.Component {
           </Col>
           <Col xs={6}></Col>
           <Col>
-            <Button variant="link" size="sm">{this.state.currentPage}</Button>
+            <Button variant="link" size="sm" onClick={this.previousPage}>Previous</Button>
           </Col>
-          <Col>Page 2/3</Col>
+          <Col>Page {this.state.currentPage}/{maxPages}</Col>
           <Col>
-            <Button variant="link" size="sm">{this.state.maxPages}</Button>
+            <Button variant="link" size="sm" onClick={this.nextPage}>Next</Button>
           </Col>
         </Row>
       </Container>
@@ -455,7 +488,7 @@ class DetailsWindow extends React.Component {
     if (this.state.title === "") {
       alert("File title cannot be empty!");
       return;
-    } if (this.props.titleExists(this.state.title)) {
+    } if (this.props.titleExists(this.state.title, this.isNewFile)) {
       alert("A file with that title already exists")
       return;
     }
