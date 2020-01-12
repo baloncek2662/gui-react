@@ -13,10 +13,7 @@ import Form from 'react-bootstrap/Form';
 
 const MAIN = "main";
 const DETAILS = "details";
-
-function titleExists(title) {
-  return false;
-}
+const NOTES_PER_PAGE = 7;
 
 class App extends React.Component {
   constructor(props) {
@@ -31,6 +28,7 @@ class App extends React.Component {
     this.getStoredFiles = this.getStoredFiles.bind(this);
     this.storeFile = this.storeFile.bind(this);
     this.deleteStoredFile = this.deleteStoredFile.bind(this);
+    this.titleExists = this.titleExists.bind(this);
 
     this.getStoredFiles();
   }
@@ -44,8 +42,6 @@ class App extends React.Component {
 
   storeFile(file, isNewFile) {
     if (!isNewFile) {
-      this.deleteStoredFile(this.state.selectedFile.title);
-    } else {
       this.setState({date: new Date()});
     }
     fetch('http://localhost:3001/saveFile', {
@@ -56,9 +52,11 @@ class App extends React.Component {
       },
       body: JSON.stringify({
         file:file,
-        date:file.date
+        date:file.date,
+        isNewFile:isNewFile,
+        deleteFile:this.state.selectedFile
       })
-    }).then(this.getStoredFiles());
+    }).then(this.getStoredFiles);
 
     this.setState({page: MAIN});
   }
@@ -73,7 +71,7 @@ class App extends React.Component {
       body: JSON.stringify({
         title: fileTitle,
       })
-    }).then(this.getStoredFiles());
+    }).then(this.getStoredFiles);
   }
   // FILE API END
 
@@ -86,6 +84,15 @@ class App extends React.Component {
       page: DETAILS,
       selectedFile: file
     });
+  }
+
+  titleExists(title) {
+    for (let i = 0; i < this.state.files.length; i++) {
+      if (this.state.files[i].title === title) {
+        return true;
+      }
+    }
+    return false;
   }
 
   render() {
@@ -102,6 +109,7 @@ class App extends React.Component {
           onDisplayMain={this.handleDisplayMain}
           onSaveFile={this.storeFile}
           selectedFile={this.state.selectedFile}
+          titleExists={this.titleExists}
         />;
     }
     return (
@@ -117,6 +125,7 @@ class MainWindow extends React.Component {
     super(props);
     this.state = {
       filters: {},
+      currentPage: 1
     };
 
     this.handleFiltersChange = this.handleFiltersChange.bind(this);
@@ -125,6 +134,7 @@ class MainWindow extends React.Component {
     this.getDisplayedFiles = this.getDisplayedFiles.bind(this);
     this.fileHasCategory = this.fileHasCategory.bind(this);
     this.getAllCategories = this.getAllCategories.bind(this);
+    this.handlePageChange = this.handlePageChange.bind(this);
   }
 
   handleFiltersChange(newFilters) {
@@ -180,7 +190,7 @@ class MainWindow extends React.Component {
   }
 
   getAllCategories() {
-    let files = this.props.files;// Create Set
+    let files = this.props.files;
     let categories = [];
     for (let i = 0; i < files.length; i++) {
       for (let j = 0; j < files[i].categories.length; j++) {
@@ -193,8 +203,11 @@ class MainWindow extends React.Component {
     return categories;
   }
 
+  handlePageChange() {
+    console.log("handle page change");
+  }
+
   render() {
-    console.log(this.props.files);
     return (
       <div>
         <FilterBar
@@ -207,7 +220,9 @@ class MainWindow extends React.Component {
           onDeleteFile={this.deleteFile}
         />
         <NavigationBar
+          files={this.getDisplayedFiles()}
           onEnterDetailsView={this.enterDetailsView}
+          onPageChange={this.handlePageChange}
         />
       </div>
     );
@@ -220,7 +235,7 @@ class FilterBar extends React.Component {
     this.state = {
       fromDate: new Date(),
       toDate: new Date(),
-      category: 'Pear'
+      category: ""
     };
 
     this.handleCategoryChange = this.handleCategoryChange.bind(this);
@@ -263,7 +278,11 @@ class FilterBar extends React.Component {
   }
 
   passFilters() {
-    let filters = {fromDate:this.state.fromDate, toDate:this.state.toDate, category:this.state.category};
+    let cat = this.state.category;
+    if (this.state.category === "" && this.props.categories.length > 0) {
+      cat = this.props.categories[0];
+    }
+    let filters = {fromDate:this.state.fromDate, toDate:this.state.toDate, category:cat};
     this.props.onFiltersChange(filters);
   }
 
@@ -359,6 +378,10 @@ class NoteTable extends React.Component {
 class NavigationBar extends React.Component {
   constructor(props) {
     super(props);
+    this.state = {
+      currentPage: 1,
+      maxPages: Math.ceil(this.props.files.length/NOTES_PER_PAGE)
+    };
 
     this.enterNewMode = this.enterNewMode.bind(this);
   }
@@ -368,6 +391,8 @@ class NavigationBar extends React.Component {
   }
 
   render() {
+    console.log(this.state.currentPage);
+    console.log(this.state.maxPages);
     return (
       <Container>
         <Row>
@@ -376,11 +401,11 @@ class NavigationBar extends React.Component {
           </Col>
           <Col xs={6}></Col>
           <Col>
-            <Button variant="link" size="sm">Previous Page</Button>
+            <Button variant="link" size="sm">{this.state.currentPage}</Button>
           </Col>
           <Col>Page 2/3</Col>
           <Col>
-            <Button variant="link" size="sm">Next Page</Button>
+            <Button variant="link" size="sm">{this.state.maxPages}</Button>
           </Col>
         </Row>
       </Container>
@@ -430,7 +455,7 @@ class DetailsWindow extends React.Component {
     if (this.state.title === "") {
       alert("File title cannot be empty!");
       return;
-    } if (titleExists(this.state.title)) {
+    } if (this.props.titleExists(this.state.title)) {
       alert("A file with that title already exists")
       return;
     }
