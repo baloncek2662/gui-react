@@ -168,7 +168,7 @@ class MainWindow extends React.Component {
   }
 
   fileHasCategory(file, category) {
-    return file.categories.includes(category);
+    return file.categories.includes(category) || category==="";
   }
 
   getFilteredFiles(page, displayOnly) {
