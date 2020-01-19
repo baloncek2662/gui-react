@@ -183,9 +183,9 @@ class MainWindow extends React.Component {
     for (let i = 0; i < files.length; i++) {
       let file = files[i];
       let d = new Date(file.date);
+      d.setSeconds(1);
       let dFrom = new Date(this.state.filters.fromDate);
       let dTo = new Date(this.state.filters.toDate);
-      dFrom.setDate(dFrom.getDate()-1);
       dFrom.setHours(0);
       dFrom.setMinutes(0);
       dFrom.setSeconds(0);
